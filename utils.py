@@ -3,6 +3,8 @@ import logging
 from logging.handlers import RotatingFileHandler
 import traceback
 import os
+from yt_dlp import YoutubeDL
+import requests
  
 
 LOG_DIR = "logs"
@@ -22,6 +24,53 @@ def prefix_passage_texts(split_docs, filename):
     return prefixed_docs
 
 
+
+def get_transcript(video_url):
+    result = {}
+    output_dir = "./subtitles"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # yt_dlp options
+    ydl_opts = {
+        "skip_download": True,              # Don't download the video
+        "writesubtitles": True,             # Download subtitles if available
+        "writeautomaticsub": True,          # Fallback to auto-generated ones
+        "subtitleslangs": ["en"],           # Prefer English subs
+        "subtitlesformat": "srt",           # Save as .srt
+        "outtmpl": f"{output_dir}/%(title)s [%(id)s].%(ext)s",  # custom filename
+        "quiet": True
+    }
+    
+    
+    with YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(video_url, download=True)
+        video_id = info.get("id")
+        title = info.get("title")
+
+    srt_path = os.path.join(output_dir, f"{title} [{video_id}].en.srt").replace("|","｜")
+    if not os.path.exists(srt_path):
+        for path in os.listdir(output_dir):
+            if video_id in path:
+                srt_path = os.path.join(output_dir,path)
+        
+
+    # Read the file and extract plain text
+    text_lines = []
+    with open(srt_path, "r", encoding="utf-8") as f:
+        for line in f:
+            # Skip numeric counters and timestamps
+            if line.strip().isdigit() or "-->" in line or line.strip() == "":
+                continue
+            text_lines.append(line.strip())
+
+    transcript_text = " ".join(text_lines)
+    
+    return {
+        "title": title,
+        "id": video_id,
+        "path": srt_path,
+        "text": transcript_text
+    }
 # === Log file paths ===
 
 

@@ -1,11 +1,15 @@
-from Agent import PDFAgent
+from Agents import DocAgent
 import streamlit as st
 from streamlit_chat import message
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from utils import *
 import tempfile
 
+
 # streaming letters and better handling at wait time
+st.set_page_config(page_title="ChatGPT-like Chatbot", page_icon="📄", layout="centered")
+st.title("📄 PDF and Text Chatbot")
+st.caption("A minimal ChatGPT-style chatbot built with Streamlit.")
 
 # --- Initialize session state ---
 if "uploaded_files" not in st.session_state:
@@ -14,16 +18,16 @@ if "uploaded_files" not in st.session_state:
 if 'history' not in st.session_state:
     st.session_state['history'] = []
 
-if 'generated' not in st.session_state:
-    st.session_state['generated'] = []
-    # "Hello ! Ask me anything about these files 🤗"
-
-if 'past' not in st.session_state:
-    st.session_state['past'] = []
-    #"Hey ! 👋"
+if "messages" not in st.session_state:
+    st.session_state["messages"] = [] 
     
 if "agent" not in st.session_state:
-    st.session_state["agent"] = PDFAgent()
+    st.session_state["agent"] = DocAgent()
+
+
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
 Agent = st.session_state["agent"]
 
@@ -66,28 +70,18 @@ def conversational_chat(query):
     st.session_state['history'] = history 
     return result
 
-    
-#container for the chat history
-response_container = st.container()
-#container for the user's text input
-container = st.container()
 
 
-with container:
-    with st.form(key='my_form', clear_on_submit=True):
-        
-        user_input = st.text_input("Query:", placeholder="Ask me anything about the PDF (:", key='input')
-        submit_button = st.form_submit_button(label='Send')
-        
-    if submit_button and user_input:
-        output = conversational_chat(user_input)
-        
-        st.session_state['past'].append(user_input)
-        st.session_state['generated'].append(output)
+if user_input := st.chat_input("Type your message here..."):
+    # Append user message
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    with st.chat_message("user"):
+        st.markdown(message["content"])
 
-if st.session_state['generated']:
-    with response_container:
-        for i in range(len(st.session_state['generated'])):
-            message(st.session_state["past"][i], is_user=True, key=str(i) + '_user', avatar_style="big-smile")
-            message(st.session_state["generated"][i], key=str(i), avatar_style="thumbs")
-            
+    response = conversational_chat(user_input)
+
+    # Append assistant message
+    st.session_state.messages.append({"role": "assistant", "content": response})
+    with st.chat_message("assistant"):
+        st.markdown(response)
+
