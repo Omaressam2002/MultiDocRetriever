@@ -1,12 +1,24 @@
-from utils import get_transcript
 import streamlit as st
 from streamlit_chat import message
 import time
-from Agent import VidAgent
+from Agents import VidAgent
 from utils import *
+import importlib
+import sys
 
+for key in list(st.session_state.keys()):
+    del st.session_state[key]
+def reload_all_modules():
+    """Reload all local project modules."""
+    modules_to_reload = [
+        "Agents.VidAgent",
+        "utils.*",
+    ]
+    for module_name in modules_to_reload:
+        if module_name in sys.modules:
+            importlib.reload(sys.modules[module_name])
 
-# seperate the two chatbots
+reload_all_modules()
 
 
 
@@ -20,17 +32,20 @@ if 'history' not in st.session_state:
     st.session_state['history'] = []
 
 if "messages" not in st.session_state:
-    st.session_state["messages"] = [] 
+    st.session_state["messages"] = [{"role": "assistant" , "content" : "Hello 👋, How Can I Help You Today?"}]  
 
 if "videos" not in st.session_state:
     st.session_state["videos"] = []  # {"url": ..., "title": ..., "transcript": ...}
 
-if "agent" not in st.session_state:
-    st.session_state["agent"] = VidAgent()
+if "Vid_Agent" not in st.session_state:
+    st.session_state["Vid_Agent"] = VidAgent()
 
-Agent = st.session_state["agent"]
+Agent = st.session_state["Vid_Agent"]
 
 # ---------- Sidebar UI for YouTube Upload ----------
+if st.sidebar.button("🔄 Reset Chat"):
+    st.session_state.clear()
+    st.rerun()
 st.sidebar.header("🎬 Video Loader")
 with st.sidebar.form(key="youtube_form",clear_on_submit=True):
     video_url = st.text_input("Enter YouTube Video URL:")  # clear

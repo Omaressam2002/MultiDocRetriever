@@ -1,0 +1,12 @@
+requests
+pinecone==7.3.0
+dotenv
+streamlit-chat
+yt-dlp
+langchain==0.3.27
+langchain_community==0.3.30
+langchain_pinecone==0.2.13
+langchain_groq==0.3.5
+langgraph==0.6.8
+streamlit
+sentence_transformers

@@ -1,5 +1,5 @@
 from typing import TypedDict, List, Tuple, Any
-from utils import *  # add reload module
+from utils import * 
 from modules import E5Embedder, MsMarcoCrossEncoder
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langgraph.graph import StateGraph, END
@@ -10,11 +10,6 @@ from pinecone import Pinecone, ServerlessSpec
 from langchain.schema import HumanMessage
 import os
 
-
-# allow each to have their prompt
-# change the prompt for each of them to give context and also use an llm to construct a query or an instruction 
-# rewrite query to extract only the
-
 load_dotenv()
 
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
@@ -22,7 +17,7 @@ PINECONE_ENV = os.getenv("PINECONE_ENV")
 INDEX_NAME = "multi-doc-index"
 
 pc = Pinecone(api_key=PINECONE_API_KEY, environment=PINECONE_ENV)
-index = pc.Index(INDEX_NAME)§
+index = pc.Index(INDEX_NAME)
 reranker = MsMarcoCrossEncoder()
 
 llm = ChatGroq(
@@ -40,6 +35,7 @@ class GraphState(TypedDict):
     llm: ChatGroq
     route: str
     history: List[Tuple[str, str]]
+    agent_type: str 
 
 
 # --------------------- ROUTER NODE ---------------------
@@ -60,10 +56,12 @@ def router_node(state: GraphState):
         )
 
         question = state["question"]
+        # provide history here too?
         prompt = (
             f"If I asked you this question: '{question}', and you have a knowledge "
-            f"database for retrieval, respond with 'yes' if you would retrieve "
+            f"database, containing PDF documents and Youtube videos' captions, for retrieval, respond with 'yes' if you would needt to retrieve "
             f"information to answer, or 'no' if you would not."
+            f"IMPORTANT : ANSWER ONLY WITH : 'YES' OR 'NO.' "
         )
 
         response = router_llm.invoke([HumanMessage(content=prompt)])
@@ -71,7 +69,7 @@ def router_node(state: GraphState):
 
         if answer == "yes":
             state["route"] = "retrieve"
-        elif answer == "no":
+        elif answer in ["no", "no."]:
             state["route"] = "answer"
         else:
             state["route"] = "error"
@@ -88,16 +86,24 @@ def router_node(state: GraphState):
 def answer_node(state: GraphState):
     try:
         state.setdefault("history", [])
+        history_text = None
         if state["history"]:
             history_text = "\n".join(
                 [f"User: {q}\nAssistant: {a}" for q, a in state["history"]]
             )
-            prompt = (
-                f"Answer the following question: {state['question']}\n\n"
-                f"Previous conversation (if relevant):\n{history_text}"
-            )
-        else:
-            prompt = f"Answer the following question: {state['question']}"
+        prompt = f"""You are a helpful, friendly, and conversational AI assistant.
+            
+            Your role:
+            - Answer questions accurately and clearly
+            - Engage naturally with greetings and casual conversation
+            - Appreciate humor and respond appropriately to jokes
+            - Be concise but thorough when needed
+            - Admit when you don't know something
+            
+            Context from previous conversation:
+            {history_text if history_text else "This is the start of the conversation."}
+            
+            User: {state['question']}"""
 
         response = llm.invoke([HumanMessage(content=prompt)])
         answer_text = response.content.strip()
@@ -119,22 +125,32 @@ def retrieve_node(state: GraphState):
     try:
         query = "query: " + state["question"]
 
-        vectorstore_pdf = PineconeVectorStore.from_existing_index(
+        if state['agent_type'] == "Vid":
+            vectorstore = PineconeVectorStore.from_existing_index(
             index_name=INDEX_NAME,
             embedding=E5Embedder(),
-            namespace="pdf"
+            namespace="youtube"
         )
-
-        vectorstore_text = PineconeVectorStore.from_existing_index(
-            index_name=INDEX_NAME,
-            embedding=E5Embedder(),
-            namespace="text"
-        )
-
-        pdf_results = vectorstore_pdf.similarity_search(query, k=10)
-        text_results = vectorstore_text.similarity_search(query, k=10)
-
-        all_results = pdf_results + text_results
+            all_results = vectorstore.similarity_search(query, k=20)
+        elif state['agent_type'] == "Doc" :
+            vectorstore_pdf = PineconeVectorStore.from_existing_index(
+                index_name=INDEX_NAME,
+                embedding=E5Embedder(),
+                namespace="pdf"
+            )
+    
+            vectorstore_text = PineconeVectorStore.from_existing_index(
+                index_name=INDEX_NAME,
+                embedding=E5Embedder(),
+                namespace="text"
+            )
+    
+    
+            pdf_results = vectorstore_pdf.similarity_search(query, k=10)
+            text_results = vectorstore_text.similarity_search(query, k=10)
+    
+            all_results = pdf_results + text_results
+        
         pairs = [(query, doc.page_content) for doc in all_results]
 
         scores = reranker.model.predict(pairs)
@@ -159,31 +175,114 @@ def generation_node(state: GraphState):
         docs = [x for x in state["docs"]]
         context = "\n\n".join([d.page_content for d in docs])
 
-        if state["history"]:
-            history_text = "\n".join(
-                [f"User: {q}\nAssistant: {a}" for q, a in state["history"]]
-            )
-            prompt = f"""
-Answer the following question using the context below. Mention the exact lines that helped you.
+        if state["agent_type"] == "Vid" :
+            if state["history"]:
+                history_text = "\n".join(
+                    [f"User: {q}\nAssistant: {a}" for q, a in state["history"]]
+                )
+                prompt = f"""You are a helpful AI assistant analyzing YouTube video content.
+            
+                        Your task: Answer the user's question based on the video captions provided below.
+                        
+                        Guidelines:
+                        - The context comes from YouTube video captions/transcripts, which may contain:
+                          * Speech-to-text errors or informal spoken language
+                          * Filler words (um, uh, like, you know)
+                          * Incomplete sentences or conversational patterns
+                          * Time-stamped segments that may be out of perfect order
+                        - Quote or paraphrase the relevant parts that support your answer
+                        - If the captions don't contain the answer, clearly state this
+                        - Mention approximately where in the video the information appears if possible
+                        - Interpret the meaning even if the wording is imperfect
+                        
+                        Question: {question}
+                        
+                        Video Captions/Transcript:
+                        {context}
+                        
+                        Previous Conversation:
+                        {history_text}
+                        
+                        Answer:"""
+            
+            else:
+                prompt = f"""You are a helpful AI assistant analyzing YouTube video content.
+            
+                        Your task: Answer the user's question based on the video captions provided below.
+                        
+                        Guidelines:
+                        - The context comes from YouTube video captions/transcripts, which may contain:
+                          * Speech-to-text errors or informal spoken language
+                          * Filler words (um, uh, like, you know)
+                          * Incomplete sentences or conversational patterns
+                          * Time-stamped segments that may be out of perfect order
+                        - Quote or paraphrase the relevant parts that support your answer
+                        - If the captions don't contain the answer, clearly state this
+                        - Mention approximately where in the video the information appears if possible
+                        - Interpret the meaning even if the wording is imperfect
+                        
+                        Question: {question}
+                        
+                        Video Captions/Transcript:
+                        {context}
+                        
+                        Answer:"""
+        else : 
+            if state["history"]:
+                history_text = "\n".join(
+                    [f"User: {q}\nAssistant: {a}" for q, a in state["history"]]
+                )
+                prompt = f"""You are a helpful AI assistant analyzing PDF document content.
+                        
+                        Your task: Answer the user's question based on the document excerpts provided below.
+                        
+                        Guidelines:
+                        - The context comes from PDF documents, which may include:
+                          * Formal written text, technical content, or structured information
+                          * Tables, lists, headings, and organized sections
+                          * Academic, business, or technical terminology
+                          * References, citations, or footnotes
+                        - Cite specific passages that support your answer
+                        - Maintain the formality and precision of the source material
+                        - If information spans multiple sections, synthesize them coherently
+                        - If the documents don't contain the answer, clearly state this
+                        - Preserve technical accuracy and specific terminology from the source
+                        
+                        Question: {question}
+                        
+                        Document Content:
+                        {context}
+                        
+                        Previous Conversation:
+                        {history_text}
+                        
+                        Answer:"""
+            
+            else:
+                prompt = f"""You are a helpful AI assistant analyzing PDF document content.
+                        
+                        Your task: Answer the user's question based on the document excerpts provided below.
+                        
+                        Guidelines:
+                        - The context comes from PDF documents, which may include:
+                          * Formal written text, technical content, or structured information
+                          * Tables, lists, headings, and organized sections
+                          * Academic, business, or technical terminology
+                          * References, citations, or footnotes
+                        - Cite specific passages that support your answer
+                        - Maintain the formality and precision of the source material
+                        - If information spans multiple sections, synthesize them coherently
+                        - If the documents don't contain the answer, clearly state this
+                        - Preserve technical accuracy and specific terminology from the source
+                        
+                        Question: {question}
+                        
+                        Document Content:
+                        {context}
+                        
+                        Answer:"""
 
-Question: {question}
-
-Context:
-{context}
-
-Conversation so far:
-{history_text}
-"""
-        else:
-            prompt = f"""
-Answer the following question using the context below. Mention the exact lines that helped you.
-
-Question: {question}
-
-Context:
-{context}
-"""
-
+        
         response = llm.invoke([HumanMessage(content=prompt)])
         answer_text = response.content.strip()
 
@@ -195,6 +294,7 @@ Context:
         write_log("[ERROR IN GENERATION NODE]:", level="error", exc=e)
 
     return state
+
 def create_RAG_graph():
     builder = StateGraph(GraphState)
 
@@ -225,7 +325,7 @@ def create_RAG_graph():
     return graph
 
 class BaseAgent:
-    def __init__(self):
+    def __init__(self, agent_type='Doc'):
         # Ensure index exists once
         if INDEX_NAME not in [i.name for i in pc.list_indexes()]:
             pc.create_index(
@@ -236,6 +336,7 @@ class BaseAgent:
             )
         
         self.graph = create_RAG_graph()
+        self.agent_type = agent_type
 
         # so that it doesnt split mid sentence
         self.splitter = RecursiveCharacterTextSplitter(
@@ -251,7 +352,8 @@ class BaseAgent:
             history = []
         result = self.graph.invoke({
             "question": query,
-            "history": history
+            "history": history,
+            "agent_type": self.agent_type
         })
         return result['answer'].content, result['history']
 
@@ -291,7 +393,7 @@ class BaseAgent:
 
 class DocAgent(BaseAgent):
     def __init__(self):
-        super().__init__()
+        super().__init__(agent_type = 'Doc')
 
     def ingest_file(self, file_content, file_type, filename):
         return super().ingest_file(file_content, file_type ,filename)
@@ -299,7 +401,7 @@ class DocAgent(BaseAgent):
 
 class VidAgent(BaseAgent):
     def __init__(self):
-        super().__init__(namespace="youtube")
+        super().__init__(agent_type = 'Vid')
 
     def ingest_file(self, file_content, file_type, file_name):
         return super().ingest_file(file_content, file_type , file_name)

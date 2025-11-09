@@ -4,7 +4,29 @@ from streamlit_chat import message
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from utils import *
 import tempfile
+import importlib
+import sys
 
+# bokra ne test we nesawar el video wehna rag3een min el safar
+# we ba3deen tesawar el video we zabat el README we es2al el wad beta3 ejada
+# then 3awzeen nezaker RAN we micro ai interview we mcp agentic comp we freelancing we mentorees we pdf picture agents we time series we ecg
+
+
+for key in list(st.session_state.keys()):
+    del st.session_state[key]
+
+
+def reload_all_modules():
+    """Reload all local project modules."""
+    modules_to_reload = [
+        "Agents.DocAgent",
+        "utils.*",
+    ]
+    for module_name in modules_to_reload:
+        if module_name in sys.modules:
+            importlib.reload(sys.modules[module_name])
+
+reload_all_modules()
 
 # streaming letters and better handling at wait time
 st.set_page_config(page_title="ChatGPT-like Chatbot", page_icon="📄", layout="centered")
@@ -15,24 +37,27 @@ st.caption("A minimal ChatGPT-style chatbot built with Streamlit.")
 if "uploaded_files" not in st.session_state:
     st.session_state["uploaded_files"] = []  # names of currently ingested files
     
-if 'history' not in st.session_state:
-    st.session_state['history'] = []
+if 'Doc_history' not in st.session_state:
+    st.session_state['Doc_history'] = []
 
-if "messages" not in st.session_state:
-    st.session_state["messages"] = [] 
+if "Doc_messages" not in st.session_state:
+    st.session_state["Doc_messages"] = [{"role": "assistant" , "content" : "Hello 👋, How Can I Help You Today?"}] 
     
-if "agent" not in st.session_state:
-    st.session_state["agent"] = DocAgent()
+if "Doc_Agent" not in st.session_state:
+    st.session_state["Doc_Agent"] = DocAgent()
 
 
-for message in st.session_state.messages:
+for message in st.session_state.Doc_messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-Agent = st.session_state["agent"]
+Agent = st.session_state["Doc_Agent"] 
 
 
 # --- Upload UI ---
+if st.sidebar.button("🔄 Reset Chat"):
+    st.session_state.clear()
+    st.rerun()
 uploaded_files = st.sidebar.file_uploader("Upload", type=["pdf", "txt"], accept_multiple_files=True)
 
 # --- Detect added or removed files ---
@@ -44,6 +69,7 @@ removed_files = [f for f in previous_filenames if f not in current_filenames]
 
 # --- Handle newly added files ---
 for uploaded_file in uploaded_files or []:
+    print(uploaded_file.get_value())
     if uploaded_file.name in added_files:
         file_type = uploaded_file.name.split('.')[-1].lower()
         with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
@@ -66,22 +92,22 @@ for removed_file in removed_files:
 st.session_state["uploaded_files"] = current_filenames
       
 def conversational_chat(query):
-    result, history = Agent.get_response(query, st.session_state['history'])
-    st.session_state['history'] = history 
+    result, history = Agent.get_response(query, st.session_state['Doc_history'])
+    st.session_state['Doc_history'] = history 
     return result
 
 
 
 if user_input := st.chat_input("Type your message here..."):
     # Append user message
-    st.session_state.messages.append({"role": "user", "content": user_input})
+    st.session_state.Doc_messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
-        st.markdown(message["content"])
+        st.markdown(user_input)
 
     response = conversational_chat(user_input)
 
     # Append assistant message
-    st.session_state.messages.append({"role": "assistant", "content": response})
+    st.session_state.Doc_messages.append({"role": "assistant", "content": response})
     with st.chat_message("assistant"):
         st.markdown(response)
 

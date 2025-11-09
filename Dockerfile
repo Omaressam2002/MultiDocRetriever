@@ -1,0 +1,26 @@
+FROM python:3.9-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /MultiDocRetriever
+
+
+COPY requirements.txt .
+
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+
+ENV STREAMLIT_SERVER_ENABLE_CORS=false
+ENV STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=false
+ENV STREAMLIT_SERVER_HEADLESS=true
+ENV STREAMLIT_SERVER_PORT=8501
+
+
+EXPOSE 8501
+
+
+CMD ["streamlit", "run", "Home.py"]
