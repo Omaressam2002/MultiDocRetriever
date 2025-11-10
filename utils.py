@@ -41,7 +41,6 @@ def get_transcript(video_url):
         "quiet": True
     }
     
-    
     with YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(video_url, download=True)
         video_id = info.get("id")

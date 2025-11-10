@@ -6,8 +6,7 @@ from utils import *
 import importlib
 import sys
 
-for key in list(st.session_state.keys()):
-    del st.session_state[key]
+
 def reload_all_modules():
     """Reload all local project modules."""
     modules_to_reload = [
@@ -46,6 +45,8 @@ Agent = st.session_state["Vid_Agent"]
 if st.sidebar.button("🔄 Reset Chat"):
     st.session_state.clear()
     st.rerun()
+
+
 st.sidebar.header("🎬 Video Loader")
 with st.sidebar.form(key="youtube_form",clear_on_submit=True):
     video_url = st.text_input("Enter YouTube Video URL:")  # clear
@@ -64,7 +65,9 @@ if submit:
             st.sidebar.warning("⚠️ This video is already added.")
         else:
             try:
+                write_log(f"File Ingesting started... for url : {video_url}: {type(video_url)}")
                 res = get_transcript(video_url)
+                write_log(f"File Ingesting in Progress: {res['title']}")
                 st.session_state["videos"].append({
                     "url": video_url,
                     "title": res["title"],
@@ -72,8 +75,8 @@ if submit:
                 })
                 st.sidebar.success(f"✅ Added: {res['title']}") # i want this to be for 5 seconds only
                 file_content = res["title"] + ": "+ res["text"]
-                Agent.ingest_file(file_content, "youtube", res["title"])
-                write_log(f"File Ingested: {res['title']}")
+                success = Agent.ingest_file(file_content, "youtube", res["title"])
+                write_log(f"File Ingested: {res['title']} : {success}")
             except Exception as e:
                 st.sidebar.error(f"Failed to load transcript: {e}")
                 write_log("[ERROR IN FILE INGESTING] :", level="error", exc=e)

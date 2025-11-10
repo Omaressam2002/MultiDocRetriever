@@ -9,6 +9,7 @@ from langchain_pinecone import PineconeVectorStore
 from pinecone import Pinecone, ServerlessSpec
 from langchain.schema import HumanMessage
 import os
+from langchain_core.documents import Document
 
 load_dotenv()
 
@@ -359,9 +360,11 @@ class BaseAgent:
 
     def ingest_file(self, file_content, file_type, source_name):
         try:
+
+            if self.agent_type == "Vid":
+                file_content = [Document(page_content=file_content)]
             split_docs = self.splitter.split_documents(file_content)
             split_docs = prefix_passage_texts(split_docs, source_name)
-
             write_log(f"Started Embedding {len(split_docs)} chunks to {file_type.upper()} Chunks...")
             PineconeVectorStore.from_documents(
                 split_docs,
@@ -369,6 +372,7 @@ class BaseAgent:
                 namespace=file_type,
                 index_name=INDEX_NAME
             )
+            print(f"Started Embedding {len(split_docs)} chunks to {file_type.upper()} Chunks...")
             write_log(f"Successfully Embedded {len(split_docs)} chunks")
         except Exception as e:
             write_log("[ERROR IN FILE INGESTING]:", level="error", exc=e)

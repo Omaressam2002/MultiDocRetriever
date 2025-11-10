@@ -6,14 +6,10 @@ from utils import *
 import tempfile
 import importlib
 import sys
+ 
 
-# bokra ne test we nesawar el video wehna rag3een min el safar
-# we ba3deen tesawar el video we zabat el README we es2al el wad beta3 ejada
 # then 3awzeen nezaker RAN we micro ai interview we mcp agentic comp we freelancing we mentorees we pdf picture agents we time series we ecg
 
-
-for key in list(st.session_state.keys()):
-    del st.session_state[key]
 
 
 def reload_all_modules():
@@ -47,10 +43,6 @@ if "Doc_Agent" not in st.session_state:
     st.session_state["Doc_Agent"] = DocAgent()
 
 
-for message in st.session_state.Doc_messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
 Agent = st.session_state["Doc_Agent"] 
 
 
@@ -69,7 +61,6 @@ removed_files = [f for f in previous_filenames if f not in current_filenames]
 
 # --- Handle newly added files ---
 for uploaded_file in uploaded_files or []:
-    print(uploaded_file.get_value())
     if uploaded_file.name in added_files:
         file_type = uploaded_file.name.split('.')[-1].lower()
         with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
@@ -96,18 +87,20 @@ def conversational_chat(query):
     st.session_state['Doc_history'] = history 
     return result
 
-
+for message in st.session_state['Doc_messages']:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
 if user_input := st.chat_input("Type your message here..."):
     # Append user message
-    st.session_state.Doc_messages.append({"role": "user", "content": user_input})
+    st.session_state['Doc_messages'].append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
 
     response = conversational_chat(user_input)
 
     # Append assistant message
-    st.session_state.Doc_messages.append({"role": "assistant", "content": response})
+    st.session_state['Doc_messages'].append({"role": "assistant", "content": response})
     with st.chat_message("assistant"):
         st.markdown(response)
 
