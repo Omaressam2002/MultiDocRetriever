@@ -4,7 +4,6 @@
 
 🎥 Demo YouTube Video: [https://youtu.be/IaCaCOoBUXg]
 
-![LangGraph Architecture](assets/Graph.png)
 
 ### 🚀 An intelligent chatbot that understands your content — from YouTube videos to documents.
 
@@ -102,7 +101,7 @@ User Query
 
 The following figure illustrates the **LangGraph Agent Flow**:
 
-![LangGraph Architecture](assets/graph.png)
+![LangGraph Architecture](assets/Graph.png)
 
 ---
 
