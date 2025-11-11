@@ -4,6 +4,14 @@
 
 🎥 Demo YouTube Video: [https://youtu.be/IaCaCOoBUXg]
 
+## 🐳 Run with Docker
+
+You can run the app instantly with Docker:
+
+```bash
+docker pull omaressam002/multidocret
+docker run -p 8501:8501 omaressam002/multidocret
+```
 
 ### 🚀 An intelligent chatbot that understands your content — from YouTube videos to documents.
 
